@@ -23,7 +23,7 @@ const generateAccessAndRefreshToken = async (userId) => {
   } catch (error) {
     throw new ApiError(
       500,
-      "Something went wrong while generating refresh and access token"
+      error?.message || "Something went wrong while generating refresh and access token"
     );
   }
 };
@@ -93,12 +93,15 @@ const registerUser = asyncHandler(async (req, res) => {
 
 const loginUser = asyncHandler(async (req, res) => {
   const { username, password, email } = req.body;
+console.log(username);
 
-  if (!username || !email) {
+  if (!(username || email)) {
     throw new ApiError(400, "username or email is required");
   }
 
   const user = await User.findOne({ $or: [{ username }, { email }] });
+  console.log(user);
+  
 
   if (!user) {
     throw new ApiError(409, "User does not exist");
@@ -110,9 +113,7 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Invalid user credentials");
   }
 
-  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
-    user._id
-  );
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
 
   const loggedInUser = await User.findOne(user._id).select(
     "-password -refreshToken"

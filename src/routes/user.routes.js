@@ -25,9 +25,9 @@ router.route("/change-current-password").post(changeCurrentPassword)
 // secured routes
 router.route("/logout").post(verifyJWT, loginUser)
 router.route("/refresh-token").post(refreshAccessToken)
-router.route("get-user").get(verifyJWT , getCurrentUser)
-router.route("update-account-detail").post(verifyJWT , updateAccountDetail)
-router.route("update-user-avatar").post(verifyJWT , upload.fields([{name : "avatar" , maxCount : 1}]) , updateUserAvatar)
-router.route("update-cover-image").post(verifyJWT , upload.fields([{name : "coverImage" , maxCount : 1}]), updateUserCoverImage)
+router.route("/get-user").get(verifyJWT , getCurrentUser)
+router.route("/update-account-detail").post(verifyJWT , updateAccountDetail)
+router.route("/update-user-avatar").post(verifyJWT , upload.fields([{name : "avatar" , maxCount : 1}]) , updateUserAvatar)
+router.route("/update-cover-image").post(verifyJWT , upload.fields([{name : "coverImage" , maxCount : 1}]), updateUserCoverImage)
 
 export default router

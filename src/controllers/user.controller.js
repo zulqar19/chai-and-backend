@@ -23,7 +23,8 @@ const generateAccessAndRefreshToken = async (userId) => {
   } catch (error) {
     throw new ApiError(
       500,
-      error?.message || "Something went wrong while generating refresh and access token"
+      error?.message ||
+        "Something went wrong while generating refresh and access token"
     );
   }
 };
@@ -93,7 +94,7 @@ const registerUser = asyncHandler(async (req, res) => {
 
 const loginUser = asyncHandler(async (req, res) => {
   const { username, password, email } = req.body;
-console.log(username);
+  console.log(username);
 
   if (!(username || email)) {
     throw new ApiError(400, "username or email is required");
@@ -101,7 +102,6 @@ console.log(username);
 
   const user = await User.findOne({ $or: [{ username }, { email }] });
   console.log(user);
-  
 
   if (!user) {
     throw new ApiError(409, "User does not exist");
@@ -113,7 +113,9 @@ console.log(username);
     throw new ApiError(401, "Invalid user credentials");
   }
 
-  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+    user._id
+  );
 
   const loggedInUser = await User.findOne(user._id).select(
     "-password -refreshToken"
@@ -137,8 +139,10 @@ console.log(username);
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
+  console.log(req.user);
+
   await User.findByIdAndUpdate(
-    req.user._id,
+    req.user?._id,
     {
       $set: {
         refreshToken: undefined,
@@ -148,6 +152,7 @@ const logoutUser = asyncHandler(async (req, res) => {
       new: true,
     }
   );
+  console.log(req.user?.refreshToken);
 
   return res
     .status(200)
@@ -180,19 +185,21 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       throw new ApiError(401, "Refresh token is expired or used");
     }
 
-    const { accessToken, newRefreshToken } =
+    const { accessToken, refreshToken } =
       await generateAccessAndRefreshToken(user._id);
+    
+    console.log(refreshToken);
 
     return res
       .status(200)
       .cookie("accessToken", accessToken, options)
-      .cookie("refreshToken", newRefreshToken, options)
+      .cookie("refreshToken", refreshToken, options)
       .json(
         new ApiResponse(
           200,
           {
             accessToken,
-            refreshToken: newRefreshToken,
+            refreshToken
           },
           "Access token refreshed"
         )
@@ -203,10 +210,14 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 });
 
 const changeCurrentPassword = asyncHandler(async (req, res) => {
+  // TODO: take the email or username for change the password and find on database 
+  
   const { oldPassword, newPassword } = req.body;
   console.log("From user controller to check req.body \n", req.body);
 
   const user = await User.findById(req.body?._id);
+  console.log(req.body);
+  
   const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
 
   if (!isPasswordCorrect) {
@@ -224,7 +235,7 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 const getCurrentUser = asyncHandler(async (req, res) => {
   return res
     .status(200)
-    .json(new ApiError(200, req.user, "current User fetched successfully"));
+    .json(new ApiResponse(200, req.user, "current User fetched successfully"));
 });
 
 const updateAccountDetail = asyncHandler(async (req, res) => {
@@ -305,6 +316,79 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, user, "cover Image updated successfully"));
 });
+
+const getUserChannelProfile = asyncHandler(async(req , res) => {
+  const {username} = req.params
+
+  if (!username?.trim()) {
+    throw new ApiError(400 , "Username is missing")
+  }
+
+  const channel = await User.aggregate([
+    {
+      $match: {
+        username : username?.toLowerCase()
+      }
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField : "_id",
+        foreignField: "channel",
+        as: "subscribers"
+      }
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField : "_id",
+        foreignField: "subscriber",
+        as: "subscribed"
+      }
+    },
+    {
+      $addFields: {
+        subscribersCount : {
+          $size : "$subscribers"
+        },
+        subscribedCount : {
+          $size : "$subscribed"
+        },
+        isSubscribed: {
+          $cond : {
+            if : {$in : [req.user?._id , "$suscribers.subscriber"]},
+            then : true,
+            else : false
+          }
+        }
+      }
+    },
+    {
+      $project : {
+        fullname :1,
+        username : 1,
+        email : 1,
+        avatar :1,
+        coverImage :1,
+        subscribersCount :1,
+        subscribedCount :1,
+        isSubscribed : 1
+      }
+    }
+  ])
+
+  if (!channel?.length) {
+    throw new ApiError(404, "channel does not exist")
+  }
+
+  console.log(channel);
+
+  return res
+  .status(200)
+  .json(new ApiResponse(200 , channel[0] , "User channel fetched successfully"))
+
+  
+})
 
 export {
   registerUser,

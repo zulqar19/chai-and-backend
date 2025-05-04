@@ -20,7 +20,7 @@ router.route("/register").post(
     registerUser)
 
 router.route("/login").post(loginUser)
-router.route("/change-current-password").post(changeCurrentPassword)
+router.route("/change-current-password").post(verifyJWT ,changeCurrentPassword)
 
 // secured routes
 router.route("/logout").post(verifyJWT, logoutUser)

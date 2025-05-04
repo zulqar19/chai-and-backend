@@ -1,7 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { deleteFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
@@ -32,7 +32,6 @@ const generateAccessAndRefreshToken = async (userId) => {
 
 const registerUser = asyncHandler(async (req, res) => {
   const { username, fullname, email, password } = req.body;
-  console.log(email, username, fullname);
 
   if (
     [username, fullname, email, password].some((field) => field?.trim() === "")
@@ -47,7 +46,7 @@ const registerUser = asyncHandler(async (req, res) => {
   if (existedUser) {
     throw new ApiError(409, "username or email already exist");
   }
-
+  
   const avatarLocalPath = req.files?.avatar[0]?.path;
   // const coverImageLocalPath = req.files?.coverImage[0]?.path
 
@@ -74,8 +73,14 @@ const registerUser = asyncHandler(async (req, res) => {
   const user = await User.create({
     fullname,
     email,
-    avatar: avatar.url,
-    coverImage: coverImage?.url || "",
+    avatar: { 
+      url: avatar.url, 
+      public_id : avatar.public_id
+    },
+    coverImage: {
+      url : coverImage?.url || "", 
+      public_id : coverImage?.public_id || ""
+    },
     username: username.toLowerCase(),
     password,
   });
@@ -95,14 +100,12 @@ const registerUser = asyncHandler(async (req, res) => {
 
 const loginUser = asyncHandler(async (req, res) => {
   const { username, password, email } = req.body;
-  console.log(username);
 
   if (!(username || email)) {
     throw new ApiError(400, "username or email is required");
   }
 
   const user = await User.findOne({ $or: [{ username }, { email }] });
-  console.log(user);
 
   if (!user) {
     throw new ApiError(409, "User does not exist");
@@ -140,7 +143,6 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-  console.log(req.user);
 
   await User.findByIdAndUpdate(
     req.user?._id,
@@ -153,7 +155,6 @@ const logoutUser = asyncHandler(async (req, res) => {
       new: true,
     }
   );
-  console.log(req.user?.refreshToken);
 
   return res
     .status(200)
@@ -211,13 +212,11 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 });
 
 const changeCurrentPassword = asyncHandler(async (req, res) => {
-  // TODO: take the email or username for change the password and find on database 
+// this is for change password when the user is logged in not for the forget password
   
   const { oldPassword, newPassword } = req.body;
-  console.log("From user controller to check req.body \n", req.body);
 
-  const user = await User.findById(req.body?._id);
-  console.log(req.body);
+  const user = await User.findById(req.user?._id);
   
   const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
 
@@ -242,7 +241,7 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 const updateAccountDetail = asyncHandler(async (req, res) => {
   const { fullname, email } = req.body;
 
-  if (!fullname || !email) {
+  if (!(fullname || email)) {
     throw new ApiError(400, "Fields are required");
   }
 
@@ -275,11 +274,22 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Error while uploading on error");
   }
 
+  const currentUser = await User.findById(req.user?._id)
+
+  if (currentUser?.avatar?.public_id) {
+    await deleteFromCloudinary(currentUser.avatar.public_id)
+  }
+
+
+
   const user = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
-        avatar: avatar.url,
+        avatar: {
+          url : avatar.url,
+          public_id : avatar.public_id
+        },
       },
     },
     { new: true }
@@ -303,11 +313,20 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Error while uploading cover Image");
   }
 
+  const currentUser = await User.findById(req.user?._id)
+
+  if (currentUser?.coverImage?.public_id) {
+    await deleteFromCloudinary(currentUser.coverImage.public_id)
+  }
+
   const user = User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
-        coverImage: coverImage.url,
+        coverImage: {
+          url : coverImage.url,
+          public_id : coverImage.public_id
+        }
       },
     },
     { new: true }
@@ -320,6 +339,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
 
 const getUserChannelProfile = asyncHandler(async(req , res) => {
   const {username} = req.params
+console.log(username);
 
   if (!username?.trim()) {
     throw new ApiError(400 , "Username is missing")
@@ -357,7 +377,7 @@ const getUserChannelProfile = asyncHandler(async(req , res) => {
         },
         isSubscribed: {
           $cond : {
-            if : {$in : [req.user?._id , "$suscribers.subscriber"]},
+            if : {$in : [req.user?._id , "$subscribers.subscriber"]},
             then : true,
             else : false
           }
@@ -378,11 +398,12 @@ const getUserChannelProfile = asyncHandler(async(req , res) => {
     }
   ])
 
+  
+  console.log(channel);
   if (!channel?.length) {
     throw new ApiError(404, "channel does not exist")
   }
 
-  console.log(channel);
 
   return res
   .status(200)
@@ -426,10 +447,11 @@ const getWatchHistory = asyncHandler(async(req , res) => {
       }
     }
   ])
+console.log(user);
 
   return res
   .status(200)
-  .json(new ApiResponse(200 , user[0].watchHistory, "watch History fetched successfully"))
+  .json(new ApiResponse(200 , user[0]?.watchHistory, "watch History fetched successfully"))
 })
 
 export {
@@ -445,3 +467,7 @@ export {
   getUserChannelProfile,
   getWatchHistory
 };
+
+
+// TODO: don't pass public id to frontend of avatar and coverImage
+//  Register Login get-user get-channel 

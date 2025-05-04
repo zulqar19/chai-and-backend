@@ -24,12 +24,23 @@ const userSchema = new Schema({
         trim : true,
         index: true
     },
-    avatar : {
-        type : String, // cloudinary url
-        required : true
-    },
+    avatar: {
+        url: {
+          type: String,
+          required: true
+        },
+        public_id: {
+          type: String,
+          required: true
+        }
+      },
     coverImage:{
-        type : String // cloudinary url 
+        url: {
+            type: String,
+          },
+          public_id: {
+            type: String,
+          }
     },
     watchHistory :[ {
         type : Schema.Types.ObjectId,

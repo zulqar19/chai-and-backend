@@ -37,5 +37,20 @@ const deleteFromCloudinary = async (publicId) => {
     }
   };
 
+const detailsFromCloudinary = async (publicId) => {
+  try {
+    if(!publicId) return;
+    const result = await cloudinary.api.resource(publicId , {
+      resource_type : "video"
+    })
 
-export {uploadOnCloudinary , deleteFromCloudinary}
+    log(result?.duration, "Cloudinary console")
+    return result?.duration
+  } catch (error) {
+    console.error("Cloudinary details fetch error: " , error)
+    return null
+  }
+}
+
+
+export {uploadOnCloudinary , deleteFromCloudinary , detailsFromCloudinary}

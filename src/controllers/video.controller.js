@@ -5,13 +5,57 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
   deleteFromCloudinary,
-  detailsFromCloudinary,
   uploadOnCloudinary,
 } from "../utils/cloudinary.js";
 
 const getAllVideos = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
   //TODO: get all videos based on query, sort, pagination
+  const { page = 1, limit = 10, query, sortBy = "createdAt", sortType = "desc", userId } = req.query;
+
+  // Step 1: Build filter object
+  const filter = {};
+  if (query) {
+    filter.$or = [
+      { title: { $regex: query, $options: "i" } },
+      { description: { $regex: query, $options: "i" } },
+    ];
+  }
+
+  if (userId && isValidObjectId(userId)) {
+    filter.owner = userId;
+  }
+
+  // Step 2: Define sort options
+  const sortOptions = {};
+  const allowedSortFields = ["title", "createdAt", "views", "duration"];
+  if (allowedSortFields.includes(sortBy)) {
+    sortOptions[sortBy] = sortType === "asc" ? 1 : -1;
+  }
+
+  // Step 3: Setup pagination
+  const skip = (Number(page) - 1) * Number(limit);
+
+  // Step 4: Query videos
+  const videos = await Video.find(filter)
+    .sort(sortOptions)
+    .skip(skip)
+    .limit(Number(limit))
+    .select("-videoFile.public_id -thumbnail.public_id")
+    .populate("owner", "fullname username avatar.url");
+
+  const totalVideos = await Video.countDocuments(filter);
+  const totalPages = Math.ceil(totalVideos / Number(limit));
+
+  // Step 5: Send response
+  return res.status(200).json(
+    new ApiResponse(200, {
+      videos,
+      page: Number(page),
+      limit: Number(limit),
+      totalVideos,
+      totalPages,
+    }, "Videos fetched successfully")
+  );
 });
 
 const publishAVideo = asyncHandler(async (req, res) => {
